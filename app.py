@@ -13,16 +13,16 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
     vehicles = [
         {"id": "Camion 01", "arr": 6.0,  "dep": 10.0, "req": 600},
         {"id": "Camion 02", "arr": 6.0,  "dep": 12.0, "req": 600},
-        {"id": "Camion 03", "arr": 10.0, "dep": 14.0, "req": 600},
-        {"id": "Camion 04", "arr": 10.5, "dep": 14.5, "req": 580},
-        {"id": "Camion 05", "arr": 10.0, "dep": 16.0, "req": 590},
-        {"id": "Camion 06", "arr": 10.0, "dep": 16.0, "req": 500},
-        {"id": "Camion 07", "arr": 10.5, "dep": 19.5, "req": 580},
-        {"id": "Camion 08", "arr": 14.0, "dep": 22.0, "req": 450},
+        {"id": "Camion 03", "arr": 10.0, "dep": 15.0, "req": 250},
+        {"id": "Camion 04", "arr": 12.5, "dep": 16.5, "req": 160},
+        {"id": "Camion 05", "arr": 13.0, "dep": 18.0, "req": 300},
+        {"id": "Camion 06", "arr": 15.0, "dep": 19.0, "req": 200},
+        {"id": "Camion 07", "arr": 16.5, "dep": 21.5, "req": 280},
+        {"id": "Camion 08", "arr": 18.0, "dep": 22.0, "req": 150},
         {"id": "Camion 09", "arr": 20.0, "dep": 29.0, "req": 350},
-        {"id": "Camion 10", "arr": 22.0, "dep": 30.0, "req": 500},
+        {"id": "Camion 10", "arr": 22.0, "dep": 30.0, "req": 400},
     ]
-
+    
     time_steps = [i * 0.25 for i in range(96)] # 96 pas de 15 min sur 24h
     n_steps = len(time_steps)
     n_veh = len(vehicles)
@@ -41,23 +41,23 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
     power_matrix = np.zeros((n_veh, n_steps))
     stall_assignment = np.zeros((n_steps, max_simultaneous), dtype=int)
     truck_stalls = {v_idx: set() for v_idx in range(n_veh)}
-
+    
     manipulations = 0
     prev_stalls = np.zeros(max_simultaneous, dtype=int)
 
     # Boucle temporelle (quart-horaire)
     for t_idx, t in enumerate(time_steps):
         present_needing_charge = [
-            v_idx for v_idx in range(n_veh)
+            v_idx for v_idx in range(n_veh) 
             if presence[v_idx, t_idx] == 1 and energy_delivered[v_idx] < energy_req[v_idx]
         ]
-
+        
         if not present_needing_charge:
             prev_stalls = np.zeros(max_simultaneous, dtype=int)
             for v_idx in range(n_veh):
                 cumulative_energy_matrix[v_idx, t_idx] = energy_delivered[v_idx]
             continue
-
+            
         # Calcul du score d'urgence avec départage par heure de départ (-dep)
         urgency = []
         for v_idx in present_needing_charge:
@@ -66,13 +66,13 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
             time_left = (dep - t) if dep > t else (dep + 24 - t)
             urgency_score = rem_energy / max(0.25, time_left)
             urgency.append((urgency_score, -dep, v_idx))
-
+            
         urgency.sort(reverse=True)
-
+        
         # Attribution des bornes : conservation du port si le camion a encore besoin de charge (pas d'échange inutile)
         current_stalls = np.zeros(max_simultaneous, dtype=int)
         assigned_vehicles = set()
-
+        
         for stall_i in range(max_simultaneous):
             old_v = prev_stalls[stall_i]
             if old_v != 0:
@@ -80,7 +80,7 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
                 if v_idx in present_needing_charge:
                     current_stalls[stall_i] = old_v
                     assigned_vehicles.add(v_idx)
-
+                    
         # Remplissage des bornes restants vides par les camions les plus urgents
         unassigned_urgent = [v_idx for _, _, v_idx in urgency if v_idx not in assigned_vehicles]
         for stall_i in range(max_simultaneous):
@@ -106,7 +106,7 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
         if plugged_indices:
             remaining_power = target_power_kw
             allocations = {v_idx: 0.0 for v_idx in plugged_indices}
-
+            
             scores = {v_idx: max(0.1, (energy_req[v_idx] - energy_delivered[v_idx]) / max(0.25, (vehicles[v_idx]["dep"] - t if vehicles[v_idx]["dep"] > t else vehicles[v_idx]["dep"] + 24 - t))) for v_idx in plugged_indices}
 
             while remaining_power >= 50.0:
@@ -175,22 +175,22 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
     # 2. Suivi Individuel par Camion (kWh Cumulés)
     fig, axes = plt.subplots(3, 4, figsize=(16, 11), sharex=True)
     axes = axes.flatten()
-
+    
     for v_idx, v in enumerate(vehicles):
         ax = axes[v_idx]
         cumul_profile = cumulative_energy_matrix[v_idx]
         req = v['req']
-
+        
         ax.plot(time_steps, cumul_profile, color="#2980b9", linewidth=2.5, label="Énergie Livrée")
         ax.axhline(y=req, color="#e74c3c", linestyle=":", label=f"Objectif ({req} kWh)")
-
+        
         pct = (energy_delivered[v_idx] / req) * 100.0
         ax.set_title(f"{v['id']} | Atteint: {pct:.1f}%", fontsize=10, fontweight="bold")
         ax.set_ylabel("kWh", fontsize=9)
         ax.grid(True, linestyle=":", alpha=0.6)
         ax.set_xlim(0, 30)
         ax.legend(fontsize=8, loc="upper left")
-
+        
     plt.suptitle("2. Suivi Individuel de la Charge par Camion (kWh Cumulés)", fontsize=13, fontweight="bold")
     plt.tight_layout()
     plt.show()
@@ -199,13 +199,13 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
     fig, axes = plt.subplots(max_simultaneous, 1, figsize=(14, 2.2 * max_simultaneous), sharex=True)
     if max_simultaneous == 1:
         axes = [axes]
-
+        
     stall_colors = ["#e67e22", "#9b59b6", "#1abc9c", "#e74c3c"]
-
+    
     for stall_i in range(max_simultaneous):
         ax = axes[stall_i]
         stall_usage = stall_assignment[:, stall_i]
-
+        
         ax.step(time_steps, stall_usage, where='mid', color=stall_colors[stall_i], linewidth=2.5)
         ax.set_yticks(range(0, n_veh + 1))
         ax.set_yticklabels(["Libre"] + [veh['id'] for veh in vehicles], fontsize=8)
@@ -213,7 +213,7 @@ def run_pure_python_simulation(target_power_kw=200.0, max_simultaneous=4):
         ax.set_ylabel("Camion", fontsize=9)
         ax.grid(True, linestyle=":", alpha=0.6)
         ax.set_xlim(0, 30)
-
+        
     plt.xlabel("Heure de la journée", fontsize=10)
     plt.suptitle("3. Suivi des Points de Charge (Occupation des Connecteurs #1 à #4)", fontsize=13, fontweight="bold")
     plt.tight_layout()
