@@ -7,10 +7,10 @@ st.set_page_config(
     page_title="Simulateur de Flotte Électrique", page_icon="⚡", layout="wide"
 )
 
-# Style visuel épuré (titre et introduction)
 st.title("⚡ Simulateur de Flotte de Camions Électriques")
 st.markdown(
-    "Modèle d'optimisation glouton avec suivi des ports et analyse des performances énergétiques."
+    "Modèle d'optimisation glouton avec suivi des ports et analyse des"
+    " performances."
 )
 st.markdown("---")
 
@@ -28,19 +28,49 @@ max_simultaneous = st.sidebar.slider(
     "Nombre de Bornes Simultanées", min_value=1, max_value=8, value=4
 )
 
-# Données de la flotte
-vehicles = [
-    {"id": "Camion 01", "arr": 6.0, "dep": 10.0, "req": 600},
-    {"id": "Camion 02", "arr": 6.0, "dep": 12.0, "req": 600},
-    {"id": "Camion 03", "arr": 10.0, "dep": 15.0, "req": 250},
-    {"id": "Camion 04", "arr": 12.5, "dep": 16.5, "req": 160},
-    {"id": "Camion 05", "arr": 13.0, "dep": 18.0, "req": 300},
-    {"id": "Camion 06", "arr": 15.0, "dep": 19.0, "req": 200},
-    {"id": "Camion 07", "arr": 16.5, "dep": 21.5, "req": 280},
-    {"id": "Camion 08", "arr": 18.0, "dep": 22.0, "req": 150},
-    {"id": "Camion 09", "arr": 20.0, "dep": 29.0, "req": 350},
-    {"id": "Camion 10", "arr": 22.0, "dep": 30.0, "req": 400},
-]
+st.sidebar.markdown("---")
+st.sidebar.header("🚚 Données des Camions")
+st.sidebar.markdown(
+    "Format par ligne : `Nom, Arrivée, Départ, Requis (kWh)`"
+)
+
+# Zone de texte modifiable directement dans le bandeau de gauche
+default_vehicles_text = """Camion 01, 6.0, 10.0, 600
+Camion 02, 6.0, 12.0, 600
+Camion 03, 10.0, 15.0, 250
+Camion 04, 12.5, 16.5, 160
+Camion 05, 13.0, 18.0, 300
+Camion 06, 15.0, 19.0, 200
+Camion 07, 16.5, 21.5, 280
+Camion 08, 18.0, 22.0, 150
+Camion 09, 20.0, 29.0, 350
+Camion 10, 22.0, 30.0, 400"""
+
+vehicles_input_str = st.sidebar.text_area(
+    "Modifier la flotte", default_vehicles_text, height=220
+)
+
+# Analyse du texte de la barre latérale pour en faire une liste de dictionnaires utilisable
+vehicles = []
+for line in vehicles_input_str.strip().split("\n"):
+  parts = [p.strip() for p in line.split(",")]
+  if len(parts) == 4:
+    try:
+      vehicles.append({
+          "id": parts[0],
+          "arr": float(parts[1]),
+          "dep": float(parts[2]),
+          "req": float(parts[3]),
+      })
+    except ValueError:
+      continue
+
+if not vehicles:
+  st.error(
+      "⚠️ Erreur dans le format des camions dans la barre latérale. Vérifiez"
+      " vos virgules."
+  )
+  st.stop()
 
 # --- 3. LOGIQUE DE SIMULATION ---
 time_steps = [i * 0.25 for i in range(96)]
@@ -167,28 +197,34 @@ for t_idx, t in enumerate(time_steps):
   for v_idx in range(n_veh):
     cumulative_energy_matrix[v_idx, t_idx] = energy_delivered[v_idx]
 
-# Calculs de synthèse
 total_req = energy_req.sum()
 total_liv = energy_delivered.sum()
-taux_recup_global = (total_liv / total_req) * 100.0
+taux_recup_global = (total_liv / total_req) * 100.0 if total_req > 0 else 0
 total_manip_time_hours = manipulations * (5.0 / 60.0)
 
-# --- 4. RESTITUTION VISUELLE PRO & CLASSE (KPIs) ---
+# --- 4. RESTITUTION VISUELLE AVEC ALERTE COULEUR ---
 st.subheader("🎯 Indicateurs Clés de Performance")
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric(
-    "Taux de Récupération",
-    f"{taux_recup_global:.1f}%",
-    delta="Optimal" if taux_recup_global > 95 else "Attention",
-)
+
+# Condition couleur pour le taux de récupération (< 100% en rouge, sinon normal/vert)
+if taux_recup_global < 100.0:
+  with col1:
+    st.markdown(
+        f"**Taux de Récupération**\n\n<h3"
+        f' style="color:#e74c3c;">{taux_recup_global:.1f}% ⚠️</h3>',
+        unsafe_allow_html=True,
+    )
+else:
+  col1.metric("Taux de Récupération", f"{taux_recup_global:.1f}%", "Optimal ✨")
+
 col2.metric("Énergie Livrée", f"{total_liv:.1f} kWh", f"Sur {total_req} kWh")
 col3.metric("Manipulations", f"{manipulations} actions", "Coût : 5 min/action")
 col4.metric("Temps Perdu", f"{total_manip_time_hours:.1f} heures")
 
 st.markdown("---")
 
-# --- 5. AFFICHAGE DES GRAPHIQUES PROPRES ---
+# --- 5. AFFICHAGE DES GRAPHIQUES ---
 st.subheader("📈 1. Suivi Global de la Station")
 fig1, ax1 = plt.subplots(figsize=(12, 4))
 fleet_total_power = power_matrix.sum(axis=0)
@@ -213,8 +249,10 @@ ax1.legend()
 st.pyplot(fig1)
 
 st.subheader("🚚 2. Suivi Individuel par Camion")
-fig2, axes2 = plt.subplots(4, 3, figsize=(15, 12), sharex=True)
-axes2 = axes2.flatten()
+# Calcul dynamique du nombre de lignes de graphiques nécessaires selon le nombre de camions
+n_rows = (n_veh + 2) // 3
+fig2, axes2 = plt.subplots(n_rows, 3, figsize=(15, 3.5 * n_rows), sharex=True)
+axes2 = np.atleast_1d(axes2).flatten()
 
 for v_idx, v in enumerate(vehicles):
   ax = axes2[v_idx]
@@ -228,12 +266,12 @@ for v_idx, v in enumerate(vehicles):
       label="Énergie Livrée",
   )
   ax.axhline(y=req, color="#e74c3c", linestyle=":", label=f"Objectif ({req})")
-  pct = (energy_delivered[v_idx] / req) * 100.0
+  pct = (energy_delivered[v_idx] / req) * 100.0 if req > 0 else 0
   ax.set_title(f"{v['id']} ({pct:.1f}%)", fontsize=10, fontweight="bold")
   ax.grid(True, linestyle=":", alpha=0.6)
   ax.set_xlim(0, 24)
 
-# Cacher les axes superflus si besoin
+# Nettoyage des sous-graphiques vides restants
 for j in range(len(vehicles), len(axes2)):
   fig2.delaxes(axes2[j])
 
