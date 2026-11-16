@@ -121,9 +121,14 @@ fleet_df = st.data_editor(
 )
 c1, c2 = st.columns(2)
 
+nb_camions = len(
+    fleet_df.dropna(
+        subset=["Camion"]
+    )
+)
 c1.metric(
     "Camions",
-    len(fleet_df)
+    nb_camions
 )
 
 c2.metric(
@@ -150,25 +155,6 @@ if not vehicles:
     st.error("⚠️ Aucun véhicule valide.")
     st.stop()
 
-vehicles = []
-
-for _, row in fleet_df.iterrows():
-
-    try:
-
-        vehicles.append({
-            "id": str(row["Camion"]),
-            "arr": float(row["Arrivée"]),
-            "dep": float(row["Départ"]),
-            "req": float(row["Besoin kWh"]),
-        })
-
-    except Exception:
-        pass
-
-if not vehicles:
-    st.error("⚠️ Aucun véhicule valide.")
-    st.stop()
 
 # --- 3. LOGIQUE DE SIMULATION ---
 time_steps = [i * 0.25 for i in range(96)]
@@ -230,34 +216,43 @@ for t_idx, t in enumerate(time_steps):
     urgency_score = rem_energy / max(0.25, time_left)
     urgency.append((urgency_score, -dep, v_idx))
 
-urgency.sort(reverse=True)
-top_urgent = {
-    v_idx
-    for _, _, v_idx in urgency[
-        : min(max_simultaneous, len(urgency))
-    ]
-}
-current_stalls = np.zeros(max_simultaneous, dtype=int)
-assigned_vehicles = set()
-
-for stall_i in range(max_simultaneous):
-    old_v = prev_stalls[stall_i]
-    if old_v != 0:
-        v_idx = old_v - 1
-        if (
-            v_idx in present_needing_charge
-            and v_idx in top_urgent
-        ):
-            current_stalls[stall_i] = old_v
-            assigned_vehicles.add(v_idx)
+  urgency.sort(reverse=True)
+  top_urgent = {
+      v_idx
+      for _, _, v_idx in urgency[
+          :min(max_simultaneous, len(urgency))
+      ]
+  }
+  current_stalls = np.zeros(
+      max_simultaneous,
+      dtype=int
+  )
+  assigned_vehicles = set()
+  for stall_i in range(max_simultaneous):
+      old_v = prev_stalls[stall_i]
+      if old_v != 0:
+          v_idx = old_v - 1
+          if (
+              v_idx in present_needing_charge
+              and v_idx in top_urgent
+          ):
+              current_stalls[stall_i] = old_v
+              assigned_vehicles.add(v_idx)
   unassigned_urgent = [
-      v_idx for _, _, v_idx in urgency if v_idx not in assigned_vehicles
+      v_idx
+      for _, _, v_idx in urgency
+      if v_idx not in assigned_vehicles
   ]
   for stall_i in range(max_simultaneous):
-    if current_stalls[stall_i] == 0 and unassigned_urgent:
-      next_v = unassigned_urgent.pop(0)
-      current_stalls[stall_i] = next_v + 1
-      assigned_vehicles.add(next_v)
+      if (
+          current_stalls[stall_i] == 0
+          and unassigned_urgent
+      ):
+          next_v = unassigned_urgent.pop(0)
+          current_stalls[stall_i] = (
+              next_v + 1
+          )
+          assigned_vehicles.add(next_v)
 
   if t_idx > 0:
     for stall_i in range(max_simultaneous):
@@ -334,8 +329,13 @@ active_ports = np.count_nonzero(
 max_ports_used = int(
     active_ports.max()
 )
-avg_ports_used = float(
-    active_ports.mean()
+active_periods = active_ports[
+    active_ports > 0
+]
+avg_ports_used = (
+    active_periods.mean()
+    if len(active_periods) > 0
+    else 0
 )
 occupation_rate = (
     np.count_nonzero(stall_assignment)
