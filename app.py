@@ -230,19 +230,26 @@ for t_idx, t in enumerate(time_steps):
     urgency_score = rem_energy / max(0.25, time_left)
     urgency.append((urgency_score, -dep, v_idx))
 
-  urgency.sort(reverse=True)
+urgency.sort(reverse=True)
+top_urgent = {
+    v_idx
+    for _, _, v_idx in urgency[
+        : min(max_simultaneous, len(urgency))
+    ]
+}
+current_stalls = np.zeros(max_simultaneous, dtype=int)
+assigned_vehicles = set()
 
-  current_stalls = np.zeros(max_simultaneous, dtype=int)
-  assigned_vehicles = set()
-
-  for stall_i in range(max_simultaneous):
+for stall_i in range(max_simultaneous):
     old_v = prev_stalls[stall_i]
     if old_v != 0:
-      v_idx = old_v - 1
-      if v_idx in present_needing_charge:
-        current_stalls[stall_i] = old_v
-        assigned_vehicles.add(v_idx)
-
+        v_idx = old_v - 1
+        if (
+            v_idx in present_needing_charge
+            and v_idx in top_urgent
+        ):
+            current_stalls[stall_i] = old_v
+            assigned_vehicles.add(v_idx)
   unassigned_urgent = [
       v_idx for _, _, v_idx in urgency if v_idx not in assigned_vehicles
   ]
