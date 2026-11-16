@@ -217,12 +217,6 @@ for t_idx, t in enumerate(time_steps):
     urgency.append((urgency_score, -dep, v_idx))
 
   urgency.sort(reverse=True)
-  top_urgent = {
-      v_idx
-      for _, _, v_idx in urgency[
-          :min(max_simultaneous, len(urgency))
-      ]
-  }
   current_stalls = np.zeros(
       max_simultaneous,
       dtype=int
@@ -234,7 +228,6 @@ for t_idx, t in enumerate(time_steps):
           v_idx = old_v - 1
           if (
               v_idx in present_needing_charge
-              and v_idx in top_urgent
           ):
               current_stalls[stall_i] = old_v
               assigned_vehicles.add(v_idx)
@@ -286,12 +279,27 @@ for t_idx, t in enumerate(time_steps):
         for v_idx in plugged_indices
     }
 
-    while remaining_power >= 50.0:
-      assigned_in_round = False
-      sorted_plugged = sorted(
-          plugged_indices, key=lambda x: scores[x], reverse=True
-      )
-      for v_idx in sorted_plugged:
+while remaining_power >= 50.0:
+    assigned_in_round = False
+    sorted_plugged = sorted(
+        plugged_indices,
+        key=lambda v_idx:
+        (
+            energy_req[v_idx]
+            - energy_delivered[v_idx]
+        )
+        /
+        max(
+            0.25,
+            (
+                vehicles[v_idx]["dep"] - t
+                if vehicles[v_idx]["dep"] > t
+                else vehicles[v_idx]["dep"] + 24 - t
+            )
+        ),
+        reverse=True
+    )
+    for v_idx in sorted_plugged:
         rem_needed_kw = (
             energy_req[v_idx] - energy_delivered[v_idx]
         ) / 0.25 - allocations[v_idx]
