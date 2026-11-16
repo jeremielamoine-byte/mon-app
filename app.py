@@ -202,11 +202,41 @@ total_liv = energy_delivered.sum()
 taux_recup_global = (total_liv / total_req) * 100.0 if total_req > 0 else 0
 total_manip_time_hours = manipulations * (5.0 / 60.0)
 
+fleet_total_power = power_matrix.sum(axis=0)
+
+peak_power = float(
+    fleet_total_power.max()
+)
+
+average_power = float(
+    fleet_total_power.mean()
+)
+
+active_ports = np.count_nonzero(
+    power_matrix,
+    axis=0
+)
+
+max_ports_used = int(
+    active_ports.max()
+)
+
+avg_ports_used = float(
+    active_ports.mean()
+)
+
+occupation_rate = (
+    np.count_nonzero(stall_assignment)
+    /
+    (n_steps * max_simultaneous)
+) * 100
+
 # --- 4. RESTITUTION VISUELLE AVEC ALERTE COULEUR ---
 st.subheader("🎯 Indicateurs Clés de Performance")
 
 col1, col2, col3, col4 = st.columns(4)
 
+col5, col6, col7, col8 = st.columns(4)
 # Condition couleur pour le taux de récupération (< 100% en rouge, sinon normal/vert)
 if taux_recup_global < 100.0:
   with col1:
@@ -221,10 +251,52 @@ else:
 col2.metric("Énergie Livrée", f"{total_liv:.1f} kWh", f"Sur {total_req} kWh")
 col3.metric("Manipulations", f"{manipulations} actions", "Coût : 5 min/action")
 col4.metric("Temps Perdu", f"{total_manip_time_hours:.1f} heures")
+col5.metric(
+    "Occupation CCS",
+    f"{occupation_rate:.1f}%"
+)
 
+col6.metric(
+    "Ports Max Utilisés",
+    str(max_ports_used)
+)
+
+col7.metric(
+    "Ports Moyens",
+    f"{avg_ports_used:.1f}"
+)
+
+col8.metric(
+    "Pic Réel",
+    f"{peak_power:.0f} kW"
+)
 st.markdown("---")
 
 # --- 5. AFFICHAGE DES GRAPHIQUES ---
+
+st.subheader("🚚 Flotte")
+fleet_table = []
+for v_idx, v in enumerate(vehicles):
+    req = v["req"]
+    delivered = energy_delivered[v_idx]
+    pct = (
+        delivered / req * 100
+        if req > 0
+        else 0
+    )
+    fleet_table.append({
+        "Camion": v["id"],
+        "Arrivée": v["arr"],
+        "Départ": v["dep"],
+        "Énergie requise": round(req, 1),
+        "Énergie livrée": round(delivered, 1),
+        "Couverture (%)": round(pct, 1)
+    })
+st.dataframe(
+    fleet_table,
+    use_container_width=True
+)
+
 st.subheader("📈 1. Suivi Global de la Station")
 fig1, ax1 = plt.subplots(figsize=(12, 4))
 fleet_total_power = power_matrix.sum(axis=0)
@@ -247,7 +319,28 @@ ax1.set_ylabel("Puissance (kW)")
 ax1.grid(True, linestyle=":", alpha=0.6)
 ax1.legend()
 st.pyplot(fig1)
-
+st.subheader("📊 Occupation des Ports")
+fig_occ, ax_occ = plt.subplots(
+    figsize=(12, 4)
+)
+ax_occ.step(
+    time_steps,
+    active_ports,
+    where="mid",
+    linewidth=2,
+    color="#3498db"
+)
+ax_occ.axhline(
+    y=max_simultaneous,
+    color="#e74c3c",
+    linestyle="--",
+    label="Ports installés"
+)
+ax_occ.set_ylabel("Ports actifs")
+ax_occ.set_xlabel("Heure")
+ax_occ.grid(True)
+ax_occ.legend()
+st.pyplot(fig_occ)
 st.subheader("🚚 2. Suivi Individuel par Camion")
 # Calcul dynamique du nombre de lignes de graphiques nécessaires selon le nombre de camions
 n_rows = (n_veh + 2) // 3
@@ -304,3 +397,72 @@ for stall_i in range(max_simultaneous):
 plt.xlabel("Heure de la journée")
 plt.tight_layout()
 st.pyplot(fig3)
+
+st.markdown("---")
+st.subheader(
+    "🏆 Recommandation Infrastructure"
+)
+r1, r2, r3, r4 = st.columns(4)
+r1.metric(
+    "Puissance Réseau",
+    f"{target_power_kw:.0f} kW"
+)
+r2.metric(
+    "Bornes Installées",
+    max_simultaneous
+)
+r3.metric(
+    "Bornes Réellement Utilisées",
+    max_ports_used
+)
+r4.metric(
+    "Occupation Moyenne",
+    f"{occupation_rate:.1f}%"
+)
+st.markdown("---")
+st.subheader(
+    "💰 Estimation Infrastructure"
+)
+cost_per_ccs = st.sidebar.number_input(
+    "Coût par borne CCS (€)",
+    value=12000
+)
+cost_per_kw = st.sidebar.number_input(
+    "Coût par kW installé (€)",
+    value=350
+)
+capex_ccs = (
+    max_simultaneous
+    * cost_per_ccs
+)
+capex_power = (
+    target_power_kw
+    * cost_per_kw
+)
+capex_total = (
+    capex_ccs
+    + capex_power
+)
+c1, c2, c3 = st.columns(3)
+c1.metric(
+    "CAPEX Réseau",
+    f"{capex_power:,.0f} €"
+)
+c2.metric(
+    "CAPEX Bornes",
+    f"{capex_ccs:,.0f} €"
+)
+c3.metric(
+    "CAPEX Total",
+    f"{capex_total:,.0f} €"
+)
+
+
+
+
+
+
+
+
+
+
