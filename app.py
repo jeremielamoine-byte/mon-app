@@ -217,55 +217,46 @@ for t_idx, t in enumerate(time_steps):
     urgency.append((urgency_score, -dep, v_idx))
 
   urgency.sort(reverse=True)
-
-current_stalls = np.zeros(
-    max_simultaneous,
-    dtype=int
-)
-assigned_vehicles = set()
-# Conserver les camions déjà branchés
-for stall_i in range(max_simultaneous):
-    old_v = prev_stalls[stall_i]
-    if old_v != 0:
-        v_idx = old_v - 1
-        if (
-            v_idx in present_needing_charge
-        ):
-            current_stalls[stall_i] = old_v
-            assigned_vehicles.add(v_idx)
-# Puis compléter avec les plus urgents
-unassigned_urgent = [
-    v_idx
-    for _, _, v_idx in urgency
-    if v_idx not in assigned_vehicles
-]
-
+  current_stalls = np.zeros(
+      max_simultaneous,
+      dtype=int
+  )
+  assigned_vehicles = set()
+  # Conserver les véhicules déjà branchés
   for stall_i in range(max_simultaneous):
-
-      if unassigned_urgent:
-
+      old_v = prev_stalls[stall_i]
+      if old_v != 0:
+          v_idx = old_v - 1
+          if v_idx in present_needing_charge:
+              current_stalls[stall_i] = old_v
+              assigned_vehicles.add(v_idx)
+  # Compléter avec les véhicules les plus urgents
+  unassigned_urgent = [
+      v_idx
+      for _, _, v_idx in urgency
+      if v_idx not in assigned_vehicles
+  ]
+  for stall_i in range(max_simultaneous):
+      if (
+          current_stalls[stall_i] == 0
+          and unassigned_urgent
+      ):
           next_v = unassigned_urgent.pop(0)
-
           current_stalls[stall_i] = (
               next_v + 1
           )
-
           assigned_vehicles.add(next_v)
-
   if t_idx > 0:
-
       for stall_i in range(max_simultaneous):
-
-if (
-    prev_stalls[stall_i] > 0
-    and current_stalls[stall_i] > 0
-    and prev_stalls[stall_i] != current_stalls[stall_i]
-):
-    manipulations += 1
-
+          if (
+              prev_stalls[stall_i] > 0
+              and current_stalls[stall_i] > 0
+              and prev_stalls[stall_i] != current_stalls[stall_i]
+          ):
+              manipulations += 1
   prev_stalls = current_stalls.copy()
-
   stall_assignment[t_idx] = current_stalls
+ 
   for stall_i, v_val in enumerate(current_stalls):
       if v_val != 0:
           truck_stalls[v_val - 1].add(
@@ -303,24 +294,10 @@ if (
       }
       while remaining_power >= 50.0:
           assigned_in_round = False
-sorted_plugged = sorted(
-    plugged_indices,
-    key=lambda v_idx:
-    (
-        energy_req[v_idx]
-        - energy_delivered[v_idx]
-    )
-    /
-    max(
-        0.25,
-        (
-            vehicles[v_idx]["dep"] - t
-            if vehicles[v_idx]["dep"] > t
-            else vehicles[v_idx]["dep"] + 24 - t
-        )
-    ),
-    reverse=True
-)
+          sorted_plugged = sorted(
+              plugged_indices,
+              key=lambda x: scores[x],
+              reverse=True
           )
           for v_idx in sorted_plugged:
               rem_needed_kw = (
