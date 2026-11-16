@@ -280,25 +280,35 @@ for t_idx, t in enumerate(time_steps):
     }
 
 while remaining_power >= 50.0:
+
     assigned_in_round = False
+
     sorted_plugged = sorted(
         plugged_indices,
-        key=lambda v_idx:
-        (
-            energy_req[v_idx]
-            - energy_delivered[v_idx]
-        )
-        /
-        max(
-            0.25,
-            (
-                vehicles[v_idx]["dep"] - t
-                if vehicles[v_idx]["dep"] > t
-                else vehicles[v_idx]["dep"] + 24 - t
-            )
-        ),
+        key=lambda x: scores[x],
         reverse=True
     )
+
+    for v_idx in sorted_plugged:
+
+        rem_needed_kw = (
+            energy_req[v_idx]
+            - energy_delivered[v_idx]
+        ) / 0.25 - allocations[v_idx]
+
+        if (
+            rem_needed_kw > 0
+            and remaining_power >= 50.0
+        ):
+
+            allocations[v_idx] += 50.0
+
+            remaining_power -= 50.0
+
+            assigned_in_round = True
+
+    if not assigned_in_round:
+        break
     for v_idx in sorted_plugged:
         rem_needed_kw = (
             energy_req[v_idx] - energy_delivered[v_idx]
