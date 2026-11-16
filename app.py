@@ -217,34 +217,43 @@ for t_idx, t in enumerate(time_steps):
     urgency.append((urgency_score, -dep, v_idx))
 
   urgency.sort(reverse=True)
+
   current_stalls = np.zeros(
-    max_simultaneous,
-    dtype=int
-)
-assigned_vehicles = set()
+      max_simultaneous,
+      dtype=int
+  )
+
+  assigned_vehicles = set()
+
   unassigned_urgent = [
       v_idx
       for _, _, v_idx in urgency
-      if v_idx not in assigned_vehicles
   ]
+
   for stall_i in range(max_simultaneous):
-      if (
-          current_stalls[stall_i] == 0
-          and unassigned_urgent
-      ):
+
+      if unassigned_urgent:
+
           next_v = unassigned_urgent.pop(0)
+
           current_stalls[stall_i] = (
               next_v + 1
           )
+
           assigned_vehicles.add(next_v)
+
   if t_idx > 0:
+
       for stall_i in range(max_simultaneous):
+
           if (
               prev_stalls[stall_i]
               != current_stalls[stall_i]
           ):
               manipulations += 1
+
   prev_stalls = current_stalls.copy()
+
   stall_assignment[t_idx] = current_stalls
   for stall_i, v_val in enumerate(current_stalls):
       if v_val != 0:
