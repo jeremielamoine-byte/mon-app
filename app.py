@@ -21,8 +21,8 @@ st.sidebar.header("🎛️ Paramètres de la Station")
 target_power_kw = st.sidebar.slider(
     "Puissance Cible Réseau (kW)",
     min_value=50.0,
-    max_value=500.0,
-    value=200.0,
+    max_value=2000.0,
+    value=400.0,
     step=10.0,
 )
 max_simultaneous = st.sidebar.slider(
