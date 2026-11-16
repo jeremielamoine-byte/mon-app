@@ -225,11 +225,14 @@ for t_idx, t in enumerate(time_steps):
   # Conserver les véhicules déjà branchés
   for stall_i in range(max_simultaneous):
       old_v = prev_stalls[stall_i]
-      if old_v != 0:
-          v_idx = old_v - 1
-          if v_idx in present_needing_charge:
-              current_stalls[stall_i] = old_v
-              assigned_vehicles.add(v_idx)
+if old_v != 0:
+    v_idx = old_v - 1
+    if (
+        v_idx in present_needing_charge
+        and energy_delivered[v_idx] < energy_req[v_idx]
+    ):
+        current_stalls[stall_i] = old_v
+        assigned_vehicles.add(v_idx)
   # Compléter avec les véhicules les plus urgents
   unassigned_urgent = [
       v_idx
@@ -273,32 +276,32 @@ for t_idx, t in enumerate(time_steps):
           v_idx: 0.0
           for v_idx in plugged_indices
       }
-      scores = {
-          v_idx: max(
-              0.1,
-              (
-                  energy_req[v_idx]
-                  - energy_delivered[v_idx]
-              )
-              /
-              max(
-                  0.25,
-                  (
-                      vehicles[v_idx]["dep"] - t
-                      if vehicles[v_idx]["dep"] > t
-                      else vehicles[v_idx]["dep"] + 24 - t
-                  ),
-              ),
-          )
-          for v_idx in plugged_indices
-      }
+     
       while remaining_power >= 50.0:
           assigned_in_round = False
           sorted_plugged = sorted(
-              plugged_indices,
-              key=lambda x: scores[x],
-              reverse=True
-          )
+    plugged_indices,
+    key=lambda v_idx:
+    (
+        energy_req[v_idx]
+        -
+        (
+            energy_delivered[v_idx]
+            +
+            allocations[v_idx] * 0.25
+        )
+    )
+    /
+    max(
+        0.25,
+        (
+            vehicles[v_idx]["dep"] - t
+            if vehicles[v_idx]["dep"] > t
+            else vehicles[v_idx]["dep"] + 24 - t
+        )
+    ),
+    reverse=True
+)
           for v_idx in sorted_plugged:
               rem_needed_kw = (
                   energy_req[v_idx]
