@@ -218,17 +218,10 @@ for t_idx, t in enumerate(time_steps):
 
   urgency.sort(reverse=True)
   current_stalls = np.zeros(
-      max_simultaneous,
-      dtype=int
-  )
-  assigned_vehicles = set()
-  for stall_i in range(max_simultaneous):
-      old_v = prev_stalls[stall_i]
-      if old_v != 0:
-          v_idx = old_v - 1
-          if v_idx in present_needing_charge:
-              current_stalls[stall_i] = old_v
-              assigned_vehicles.add(v_idx)
+    max_simultaneous,
+    dtype=int
+)
+assigned_vehicles = set()
   unassigned_urgent = [
       v_idx
       for _, _, v_idx in urgency
