@@ -217,7 +217,6 @@ for t_idx, t in enumerate(time_steps):
     urgency.append((urgency_score, -dep, v_idx))
 
   urgency.sort(reverse=True)
-
   current_stalls = np.zeros(
       max_simultaneous,
       dtype=int
@@ -227,9 +226,7 @@ for t_idx, t in enumerate(time_steps):
       old_v = prev_stalls[stall_i]
       if old_v != 0:
           v_idx = old_v - 1
-          if (
-              v_idx in present_needing_charge
-          ):
+          if v_idx in present_needing_charge:
               current_stalls[stall_i] = old_v
               assigned_vehicles.add(v_idx)
   unassigned_urgent = [
@@ -247,106 +244,83 @@ for t_idx, t in enumerate(time_steps):
               next_v + 1
           )
           assigned_vehicles.add(next_v)
-
   if t_idx > 0:
-    for stall_i in range(max_simultaneous):
-      if prev_stalls[stall_i] != current_stalls[stall_i]:
-        manipulations += 1
+      for stall_i in range(max_simultaneous):
+          if (
+              prev_stalls[stall_i]
+              != current_stalls[stall_i]
+          ):
+              manipulations += 1
   prev_stalls = current_stalls.copy()
   stall_assignment[t_idx] = current_stalls
-plugged_indices = sorted(
-    [v - 1 for v in current_stalls if v != 0],
-    key=lambda v_idx:
-    (
-        energy_req[v_idx]
-        - energy_delivered[v_idx]
-    )
-    /
-    max(
-        0.25,
-        (
-            vehicles[v_idx]["dep"] - t
-            if vehicles[v_idx]["dep"] > t
-            else vehicles[v_idx]["dep"] + 24 - t
-        )
-    ),
-    reverse=True
-)
-
   for stall_i, v_val in enumerate(current_stalls):
-    if v_val != 0:
-      truck_stalls[v_val - 1].add(stall_i + 1)
-
-plugged_indices = sorted(
-    [v - 1 for v in current_stalls if v != 0],
-    key=lambda v_idx:
-    (
-        energy_req[v_idx]
-        - energy_delivered[v_idx]
-    )
-    /
-    max(
-        0.25,
-        (
-            vehicles[v_idx]["dep"] - t
-            if vehicles[v_idx]["dep"] > t
-            else vehicles[v_idx]["dep"] + 24 - t
-        )
-    ),
-    reverse=True
-)
-
+      if v_val != 0:
+          truck_stalls[v_val - 1].add(
+              stall_i + 1
+          )
+  plugged_indices = [
+      v - 1
+      for v in current_stalls
+      if v != 0
+  ]
   if plugged_indices:
-    remaining_power = target_power_kw
-    allocations = {
-        v_idx: 0.0
-        for v_idx in plugged_indices
-    }
-    scores = {
-        v_idx: max(
-            0.1,
-            (energy_req[v_idx] - energy_delivered[v_idx])
-            / max(
-                0.25,
-                (
-                    vehicles[v_idx]["dep"] - t
-                    if vehicles[v_idx]["dep"] > t
-                    else vehicles[v_idx]["dep"] + 24 - t
-                ),
-            ),
-        )
-        for v_idx in plugged_indices
-    }
-    while remaining_power >= 50.0:
-        assigned_in_round = False
-        sorted_plugged = sorted(
-            plugged_indices,
-            key=lambda x: scores[x],
-            reverse=True
-        )
-        for v_idx in sorted_plugged:
-            rem_needed_kw = (
-                energy_req[v_idx]
-                - energy_delivered[v_idx]
-            ) / 0.25 - allocations[v_idx]
-            if (
-                rem_needed_kw > 0
-                and remaining_power >= 50.0
-            ):
-                allocations[v_idx] += 50.0
-                remaining_power -= 50.0
-                assigned_in_round = True
-        if not assigned_in_round:
-            break
-    for v_idx in plugged_indices:
-        actual_power = allocations[v_idx]
-        if actual_power > 0:
-            power_matrix[v_idx, t_idx] = actual_power
-            energy_delivered[v_idx] += actual_power * 0.25
-
-
+      remaining_power = target_power_kw
+      allocations = {
+          v_idx: 0.0
+          for v_idx in plugged_indices
+      }
+      scores = {
+          v_idx: max(
+              0.1,
+              (
+                  energy_req[v_idx]
+                  - energy_delivered[v_idx]
+              )
+              /
+              max(
+                  0.25,
+                  (
+                      vehicles[v_idx]["dep"] - t
+                      if vehicles[v_idx]["dep"] > t
+                      else vehicles[v_idx]["dep"] + 24 - t
+                  ),
+              ),
+          )
+          for v_idx in plugged_indices
+      }
+      while remaining_power >= 50.0:
+          assigned_in_round = False
+          sorted_plugged = sorted(
+              plugged_indices,
+              key=lambda x: scores[x],
+              reverse=True
+          )
+          for v_idx in sorted_plugged:
+              rem_needed_kw = (
+                  energy_req[v_idx]
+                  - energy_delivered[v_idx]
+              ) / 0.25 - allocations[v_idx]
+              if (
+                  rem_needed_kw > 0
+                  and remaining_power >= 50.0
+              ):
+                  allocations[v_idx] += 50.0
+                  remaining_power -= 50.0
+                  assigned_in_round = True
+          if not assigned_in_round:
+              break
+      for v_idx in plugged_indices:
+          actual_power = allocations[v_idx]
+          if actual_power > 0:
+              power_matrix[v_idx, t_idx] = actual_power
+              energy_delivered[v_idx] += (
+                  actual_power * 0.25
+              )
   for v_idx in range(n_veh):
-    cumulative_energy_matrix[v_idx, t_idx] = energy_delivered[v_idx]
+      cumulative_energy_matrix[
+          v_idx,
+          t_idx
+      ] = energy_delivered[v_idx]
 
 total_req = energy_req.sum()
 total_liv = energy_delivered.sum()
