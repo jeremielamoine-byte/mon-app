@@ -67,19 +67,19 @@ vehicles_input_str = st.sidebar.text_area(
 # Analyse du texte de la barre latérale pour en faire une liste de dictionnaires utilisable
 vehicles = []
 for line in vehicles_input_str.strip().split("\n"):
-  parts = [p.strip() for p in line.split(",")]
-  if len(parts) == 4:
-    try:
-arr = float(parts[1])
-dep = float(parts[2])
-vehicles.append({
-    "id": parts[0],
-    "arr": arr % 24,
-    "dep": dep,
-    "req": float(parts[3]),
-})
-    except ValueError:
-      continue
+    parts = [p.strip() for p in line.split(",")]
+    if len(parts) == 4:
+        try:
+            arr = float(parts[1])
+            dep = float(parts[2])
+            vehicles.append({
+                "id": parts[0],
+                "arr": arr,
+                "dep": dep,
+                "req": float(parts[3]),
+            })
+        except ValueError:
+            continue
 
 if not vehicles:
   st.error(
