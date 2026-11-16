@@ -217,6 +217,7 @@ for t_idx, t in enumerate(time_steps):
     urgency.append((urgency_score, -dep, v_idx))
 
   urgency.sort(reverse=True)
+
   current_stalls = np.zeros(
       max_simultaneous,
       dtype=int
@@ -253,12 +254,47 @@ for t_idx, t in enumerate(time_steps):
         manipulations += 1
   prev_stalls = current_stalls.copy()
   stall_assignment[t_idx] = current_stalls
+plugged_indices = sorted(
+    [v - 1 for v in current_stalls if v != 0],
+    key=lambda v_idx:
+    (
+        energy_req[v_idx]
+        - energy_delivered[v_idx]
+    )
+    /
+    max(
+        0.25,
+        (
+            vehicles[v_idx]["dep"] - t
+            if vehicles[v_idx]["dep"] > t
+            else vehicles[v_idx]["dep"] + 24 - t
+        )
+    ),
+    reverse=True
+)
 
   for stall_i, v_val in enumerate(current_stalls):
     if v_val != 0:
       truck_stalls[v_val - 1].add(stall_i + 1)
 
-  plugged_indices = [v - 1 for v in current_stalls if v != 0]
+plugged_indices = sorted(
+    [v - 1 for v in current_stalls if v != 0],
+    key=lambda v_idx:
+    (
+        energy_req[v_idx]
+        - energy_delivered[v_idx]
+    )
+    /
+    max(
+        0.25,
+        (
+            vehicles[v_idx]["dep"] - t
+            if vehicles[v_idx]["dep"] > t
+            else vehicles[v_idx]["dep"] + 24 - t
+        )
+    ),
+    reverse=True
+)
 
   if plugged_indices:
     remaining_power = target_power_kw
