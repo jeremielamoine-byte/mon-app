@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
+import pandas as pd
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -27,66 +28,128 @@ target_power_kw = st.sidebar.slider(
 max_simultaneous = st.sidebar.slider(
     "Nombre de Bornes Simultanées", min_value=1, max_value=8, value=4
 )
+# ====================================================
+# FLOTTE
+# ====================================================
 
-st.sidebar.markdown("---")
-st.sidebar.header("🚚 Données des Camions")
-st.sidebar.markdown(
-"""
-Format :
-Nom, Arrivée, Départ, Requis(kWh)
-Exemples :
-Camion A,22.5,5.25,300
-Camion B,18.75,6.5,450
-Camion C,8.0,17.5,250
-22.5 = 22h30
-5.25 = 05h15
-17.75 = 17h45
-Les horaires du lendemain peuvent être saisis :
-20 -> 5
-ou
-20 -> 29
-"""
+st.subheader("🚚 Configuration de la Flotte")
+
+default_df = pd.DataFrame({
+    "Camion": [
+        "Camion 01",
+        "Camion 02",
+        "Camion 03",
+        "Camion 04",
+        "Camion 05",
+        "Camion 06",
+        "Camion 07",
+        "Camion 08",
+        "Camion 09",
+        "Camion 10",
+    ],
+    "Arrivée": [
+        6.0,
+        6.0,
+        10.0,
+        12.5,
+        13.0,
+        15.0,
+        16.5,
+        18.0,
+        20.0,
+        22.0,
+    ],
+    "Départ": [
+        10.0,
+        12.0,
+        15.0,
+        16.5,
+        18.0,
+        19.0,
+        21.5,
+        22.0,
+        29.0,
+        30.0,
+    ],
+    "Besoin kWh": [
+        600,
+        600,
+        250,
+        160,
+        300,
+        200,
+        280,
+        150,
+        350,
+        400,
+    ]
+})
+c1, c2 = st.columns(2)
+
+c1.metric(
+    "Camions",
+   len(fleet_df)
 )
 
-# Zone de texte modifiable directement dans le bandeau de gauche
-default_vehicles_text = """Camion 01, 6.0, 10.0, 600
-Camion 02, 6.0, 12.0, 600
-Camion 03, 10.0, 15.0, 250
-Camion 04, 12.5, 16.5, 160
-Camion 05, 13.0, 18.0, 300
-Camion 06, 15.0, 19.0, 200
-Camion 07, 16.5, 21.5, 280
-Camion 08, 18.0, 22.0, 150
-Camion 09, 20.0, 29.0, 350
-Camion 10, 22.0, 30.0, 400"""
-
-vehicles_input_str = st.sidebar.text_area(
-    "Modifier la flotte", default_vehicles_text, height=220
+c2.metric(
+    "Besoin Total",
+    f"{fleet_df['Besoin kWh'].sum():,.0f} kWh"
 )
+fleet_df = st.data_editor(
+    default_df,
+    num_rows="dynamic",
+    use_container_width=True,
+    hide_index=True,
+    column_config={
 
-# Analyse du texte de la barre latérale pour en faire une liste de dictionnaires utilisable
+        "Camion": st.column_config.TextColumn(
+            "Camion"
+        ),
+
+        "Arrivée": st.column_config.NumberColumn(
+            "Arrivée",
+            min_value=0.0,
+            max_value=48.0,
+            step=0.25,
+            format="%.2f"
+        ),
+
+        "Départ": st.column_config.NumberColumn(
+            "Départ",
+            min_value=0.0,
+            max_value=48.0,
+            step=0.25,
+            format="%.2f"
+        ),
+
+        "Besoin kWh": st.column_config.NumberColumn(
+            "Besoin kWh",
+            min_value=0,
+            step=10
+        ),
+    }
+)
 vehicles = []
-for line in vehicles_input_str.strip().split("\n"):
-    parts = [p.strip() for p in line.split(",")]
-    if len(parts) == 4:
-        try:
-            arr = float(parts[1])
-            dep = float(parts[2])
-            vehicles.append({
-                "id": parts[0],
-                "arr": arr,
-                "dep": dep,
-                "req": float(parts[3]),
-            })
-        except ValueError:
-            continue
+
+for _, row in fleet_df.iterrows():
+
+    try:
+
+        vehicles.append({
+            "id": str(row["Camion"]),
+            "arr": float(row["Arrivée"]),
+            "dep": float(row["Départ"]),
+            "req": float(row["Besoin kWh"]),
+        })
+
+    except Exception:
+        pass
 
 if not vehicles:
-  st.error(
-      "⚠️ Erreur dans le format des camions dans la barre latérale. Vérifiez"
-      " vos virgules."
-  )
-  st.stop()
+    st.error("⚠️ Aucun véhicule valide.")
+    st.stop()
+
+
 
 # --- 3. LOGIQUE DE SIMULATION ---
 time_steps = [i * 0.25 for i in range(96)]
