@@ -84,17 +84,7 @@ default_df = pd.DataFrame({
         400,
     ]
 })
-c1, c2 = st.columns(2)
 
-c1.metric(
-    "Camions",
-   len(fleet_df)
-)
-
-c2.metric(
-    "Besoin Total",
-    f"{fleet_df['Besoin kWh'].sum():,.0f} kWh"
-)
 fleet_df = st.data_editor(
     default_df,
     num_rows="dynamic",
@@ -129,6 +119,17 @@ fleet_df = st.data_editor(
         ),
     }
 )
+c1, c2 = st.columns(2)
+
+c1.metric(
+    "Camions",
+    len(fleet_df)
+)
+
+c2.metric(
+    "Besoin Total",
+    f"{fleet_df['Besoin kWh'].sum():,.0f} kWh"
+)
 vehicles = []
 
 for _, row in fleet_df.iterrows():
@@ -149,7 +150,25 @@ if not vehicles:
     st.error("⚠️ Aucun véhicule valide.")
     st.stop()
 
+vehicles = []
 
+for _, row in fleet_df.iterrows():
+
+    try:
+
+        vehicles.append({
+            "id": str(row["Camion"]),
+            "arr": float(row["Arrivée"]),
+            "dep": float(row["Départ"]),
+            "req": float(row["Besoin kWh"]),
+        })
+
+    except Exception:
+        pass
+
+if not vehicles:
+    st.error("⚠️ Aucun véhicule valide.")
+    st.stop()
 
 # --- 3. LOGIQUE DE SIMULATION ---
 time_steps = [i * 0.25 for i in range(96)]
