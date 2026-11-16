@@ -31,7 +31,21 @@ max_simultaneous = st.sidebar.slider(
 st.sidebar.markdown("---")
 st.sidebar.header("🚚 Données des Camions")
 st.sidebar.markdown(
-    "Format par ligne : `Nom, Arrivée, Départ, Requis (kWh)`"
+"""
+Format :
+Nom, Arrivée, Départ, Requis(kWh)
+Exemples :
+Camion A,22.5,5.25,300
+Camion B,18.75,6.5,450
+Camion C,8.0,17.5,250
+22.5 = 22h30
+5.25 = 05h15
+17.75 = 17h45
+Les horaires du lendemain peuvent être saisis :
+20 -> 5
+ou
+20 -> 29
+"""
 )
 
 # Zone de texte modifiable directement dans le bandeau de gauche
@@ -56,12 +70,14 @@ for line in vehicles_input_str.strip().split("\n"):
   parts = [p.strip() for p in line.split(",")]
   if len(parts) == 4:
     try:
-      vehicles.append({
-          "id": parts[0],
-          "arr": float(parts[1]),
-          "dep": float(parts[2]),
-          "req": float(parts[3]),
-      })
+arr = float(parts[1])
+dep = float(parts[2])
+vehicles.append({
+    "id": parts[0],
+    "arr": arr % 24,
+    "dep": dep,
+    "req": float(parts[3]),
+})
     except ValueError:
       continue
 
@@ -83,11 +99,25 @@ energy_delivered = np.zeros(n_veh)
 cumulative_energy_matrix = np.zeros((n_veh, n_steps))
 
 for v_idx, v in enumerate(vehicles):
-  arr, dep = v["arr"], v["dep"]
-  for t_idx, t in enumerate(time_steps):
-    if arr <= dep:
-      if arr <= t < dep or arr <= t + 24 < dep:
-        presence[v_idx, t_idx] = 1
+    arr = float(v["arr"])
+    dep = float(v["dep"])
+    for t_idx, t in enumerate(time_steps):
+        # présence 24h/24
+        if abs(arr - dep) < 0.001:
+            presence[v_idx, t_idx] = 1
+        # format lendemain exprimé >24h
+        elif dep >= 24:
+            dep_norm = dep - 24
+            if t >= arr or t < dep_norm:
+                presence[v_idx, t_idx] = 1
+        # même journée
+        elif arr < dep:
+            if arr <= t < dep:
+                presence[v_idx, t_idx] = 1
+        # traverse minuit
+        else:
+            if t >= arr or t < dep:
+                presence[v_idx, t_idx] = 1
 
 power_matrix = np.zeros((n_veh, n_steps))
 stall_assignment = np.zeros((n_steps, max_simultaneous), dtype=int)
@@ -201,35 +231,37 @@ total_req = energy_req.sum()
 total_liv = energy_delivered.sum()
 taux_recup_global = (total_liv / total_req) * 100.0 if total_req > 0 else 0
 total_manip_time_hours = manipulations * (5.0 / 60.0)
-
 fleet_total_power = power_matrix.sum(axis=0)
-
 peak_power = float(
     fleet_total_power.max()
 )
-
-average_power = float(
+avg_power = float(
     fleet_total_power.mean()
 )
-
 active_ports = np.count_nonzero(
     power_matrix,
     axis=0
 )
-
 max_ports_used = int(
     active_ports.max()
 )
-
 avg_ports_used = float(
     active_ports.mean()
 )
-
 occupation_rate = (
     np.count_nonzero(stall_assignment)
     /
-    (n_steps * max_simultaneous)
+    (
+        n_steps
+        * max_simultaneous
+    )
 ) * 100
+peak_time_index = np.argmax(
+    fleet_total_power
+)
+peak_time = time_steps[
+    peak_time_index
+]
 
 # --- 4. RESTITUTION VISUELLE AVEC ALERTE COULEUR ---
 st.subheader("🎯 Indicateurs Clés de Performance")
@@ -370,6 +402,32 @@ for j in range(len(vehicles), len(axes2)):
 
 plt.tight_layout()
 st.pyplot(fig2)
+st.subheader(
+    "🔥 Heatmap de Recharge"
+)
+fig_heat, ax_heat = plt.subplots(
+    figsize=(14,6)
+)
+im = ax_heat.imshow(
+    power_matrix,
+    aspect="auto",
+    cmap="YlOrRd"
+)
+ax_heat.set_xlabel(
+    "Pas de temps (15 min)"
+)
+ax_heat.set_ylabel(
+    "Camions"
+)
+ax_heat.set_title(
+    "Répartition des puissances"
+)
+plt.colorbar(
+    im,
+    ax=ax_heat,
+    label="Puissance (kW)"
+)
+st.pyplot(fig_heat)
 
 st.subheader("🔌 3. Occupation des Points de Charge")
 fig3, axes3 = plt.subplots(
@@ -400,69 +458,54 @@ st.pyplot(fig3)
 
 st.markdown("---")
 st.subheader(
-    "🏆 Recommandation Infrastructure"
+    "🏆 Analyse de l'Infrastructure"
+)
+util_power_ratio = (
+    peak_power
+    / target_power_kw
+    * 100
+)
+util_ports_ratio = (
+    max_ports_used
+    / max_simultaneous
+    * 100
+)
+unused_power = (
+    target_power_kw
+    - peak_power
+)
+unused_ports = (
+    max_simultaneous
+    - max_ports_used
 )
 r1, r2, r3, r4 = st.columns(4)
 r1.metric(
-    "Puissance Réseau",
-    f"{target_power_kw:.0f} kW"
+    "Pic Réseau Réel",
+    f"{peak_power:.0f} kW"
 )
 r2.metric(
-    "Bornes Installées",
-    max_simultaneous
+    "Utilisation Réseau",
+    f"{util_power_ratio:.1f}%"
 )
 r3.metric(
-    "Bornes Réellement Utilisées",
+    "Simultanéité Max",
     max_ports_used
 )
 r4.metric(
-    "Occupation Moyenne",
-    f"{occupation_rate:.1f}%"
+    "Utilisation CCS",
+    f"{util_ports_ratio:.1f}%"
 )
-st.markdown("---")
-st.subheader(
-    "💰 Estimation Infrastructure"
+r5, r6 = st.columns(2)
+r5.metric(
+    "Puissance Inutilisée",
+    f"{unused_power:.0f} kW"
 )
-cost_per_ccs = st.sidebar.number_input(
-    "Coût par borne CCS (€)",
-    value=12000
+r6.metric(
+    "Ports Inutilisés",
+    int(unused_ports)
 )
-cost_per_kw = st.sidebar.number_input(
-    "Coût par kW installé (€)",
-    value=350
+st.info(
+    f"Pic observé à {peak_time:.2f} h "
+    f"avec {peak_power:.0f} kW."
 )
-capex_ccs = (
-    max_simultaneous
-    * cost_per_ccs
-)
-capex_power = (
-    target_power_kw
-    * cost_per_kw
-)
-capex_total = (
-    capex_ccs
-    + capex_power
-)
-c1, c2, c3 = st.columns(3)
-c1.metric(
-    "CAPEX Réseau",
-    f"{capex_power:,.0f} €"
-)
-c2.metric(
-    "CAPEX Bornes",
-    f"{capex_ccs:,.0f} €"
-)
-c3.metric(
-    "CAPEX Total",
-    f"{capex_total:,.0f} €"
-)
-
-
-
-
-
-
-
-
-
 
